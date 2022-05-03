@@ -3,7 +3,7 @@ project:
   output-dir: docs
 
 website:
-  title: "buckleys_code"
+  title: "Buckley's & None code"
   navbar:
     background: primary
     left:
@@ -13,7 +13,8 @@ website:
 
 format:
   html:
-    theme: sandstone
+    code-fold: show
+    theme: flatly
     css: styles.css
     toc: true
 

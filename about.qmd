@@ -4,6 +4,10 @@ title: "About"
 
 About this site
 
+\[Voltron Data\](https://voltrondata.com)\
+
+\<a href="https://docs.microsoft.com/en-us/azure/virtual-network/ddos-protection-overview"\>Azure DDOS Protection Standard\</a\>
+
 ```{r}
 1 + 1
 ```
