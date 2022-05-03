@@ -1,0 +1,1 @@
+This directory holds outputs generated when stan model is run. 
