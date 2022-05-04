@@ -4,6 +4,7 @@ project:
 
 website:
   title: "Buckley's & None code"
+  google-analytics: "UA-136671602-2"
 
 format:
   html:
