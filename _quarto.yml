@@ -3,8 +3,18 @@ project:
   output-dir: docs
 
 website:
+  favicon: "favicon.png"
   title: "Buckley's & None code"
   google-analytics: "UA-136671602-2"
+  search: false
+  navbar:
+    background: light
+    logo: logo.png
+    right: 
+      - icon: twitter
+        href: https://twitter.com/martintburgess
+      - icon: github
+        href: https://github.com/martintburgess/buckleys_public
 
 format:
   html:

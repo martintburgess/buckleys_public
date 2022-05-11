@@ -15,6 +15,8 @@ The code requires [tidyverse](https://www.tidyverse.org) and [rstan](https://mc-
 library(tidyverse)
 library(rstan)
 library(scales)
+library(glue)
+library(knitr)
 
 theme_set(theme_minimal())
 
@@ -321,14 +323,16 @@ rm(temp, samples, samples_no_ts)
 Calculate proportion of samples for the three primary outcomes: ALP win, Liberal/National Coalition (LNC) win or minority government.
 
 ```{r}
+#| tbl-colwidths: [60,40]
 samples_election_date %>%
   count(alp_seats, lnc_seats) |> 
   mutate(prop = n / sum(n)) |> 
-  mutate(winner = case_when(alp_seats >= 76 ~ "ALP",
-                            lnc_seats >= 76 ~ "LNC", 
-                            TRUE ~ "Minority")) %>%
-  group_by(winner) |> 
-  summarise(prop = sum(prop))
+  mutate(outcome = case_when(alp_seats >= 76 ~ "ALP win",
+                            lnc_seats >= 76 ~ "Coalition win", 
+                            TRUE ~ "Minority government"))  |> 
+  group_by(outcome) |> 
+  summarise(chance = percent(sum(prop), accuracy = 0.1)) |> 
+  kable()
 ```
 
 #### Timeline
@@ -337,37 +341,56 @@ samples_election_date %>%
 chances_ts <- samples_ts |> 
   filter(date > (max(date) - floor(365/2))) |>  # last 6 months of data
   group_by(date) |> 
-  summarise(alp_win = mean(alp_seats >=76),
-            lnc_win = mean(lnc_seats >=76),
-            minority_win = mean(lnc_seats <76 & alp_seats < 76)) |> 
+  summarise(`ALP win` = mean(alp_seats >=76),
+            `Coalition win` = mean(lnc_seats >=76),
+            `Minority\ngovernment` = mean(lnc_seats <76 & alp_seats < 76)) |> 
   ungroup() |> 
-  pivot_longer(cols = c(alp_win, 
-                        lnc_win, 
-                        minority_win),
+  pivot_longer(cols = -c(date),
                names_to = "outcome",
                values_to = "chance") |> 
-  select(date, outcome, chance)
+  select(date, outcome, chance) |> 
+  mutate(outcome = fct_reorder2(outcome, date, chance))
 
 chances_ts |> 
   ggplot(aes(x = date, 
              y = chance,
              colour = outcome)) +
   geom_line() + 
-  scale_y_continuous(labels = percent_format(accuracy = 1))
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_x_date(date_labels = "%b '%y") +
+  labs(x = "", 
+       y = "Chance of outcome", 
+       colour = "")
 ```
 
 ### Seats won
 
 #### Election day margin between major parties
 
-Positive represents LNC winning more seats than ALP. Negative represents represents Labor winning more seats than the LNC.
-
 ```{r}
+
+x_lab <- function(x) {
+  l <- tibble(x = x) |> 
+    mutate(p = case_when(x > 0 ~ " COA", 
+                         x < 0 ~ " ALP", 
+                         TRUE ~ "")) |> 
+    mutate(lab = glue("+{abs(x)}{p}")) |> 
+    pull(lab)
+  
+  return(l)
+}
+
 samples_election_date |> 
   ggplot(aes(x = seat_margin)) +
-  geom_histogram(binwidth = 1) + 
+  geom_vline(xintercept = 0) +
+  geom_histogram(binwidth = 1, 
+                 alpha = 0.9) + 
   geom_vline(xintercept = 9, 
              colour = "red") + 
+  labs(y = "More likely →", 
+       x = "← ALP win more, Coalition win more →") +
+  scale_x_continuous(labels = x_lab) +
+  theme(axis.text.y = element_blank()) +
   annotate("text", 
            x = 9+1, 
            y = Inf, 
@@ -394,13 +417,16 @@ samples_election_date |>
              alpha = 0.5,
              colour = "red") + 
   scale_fill_continuous(labels = percent_format(accuracy = 0.1)) +
+  labs(y = "Coalition seats", 
+       x = "ALP seats", 
+       fill = "Chance") +
   annotate("text", 
            x = 72, 
            y = 80, 
            colour = "red",
            label = "2019 result",
            hjust = 0, 
-           vjust = 1)
+           vjust = 0)
 ```
 
 #### ALP and LNC seats timeline
@@ -419,33 +445,57 @@ seats_ts <- samples_ts |>
   summarise(seats_50 = quantile(seats, 0.5), 
             seats_10 = quantile(seats, 0.1),
             seats_90 = quantile(seats, 0.9)) |> 
-  mutate(across(starts_with("seats_"), ~round(.x)))
+  mutate(across(starts_with("seats_"), ~round(.x))) |> 
+  ungroup() |> 
+  mutate(colour = fct_reorder2(colour, date, seats_50))
 
 seats_ts |> 
   ggplot(aes(x = date, 
              y = seats_50,
              ymin = seats_10, 
              ymax = seats_90,
-             colour = party, 
-             fill = party)) +
-  geom_ribbon(alpha = 0.2, 
+             colour = colour, 
+             fill = colour)) +
+  geom_ribbon(alpha = 0.4, 
               colour = NA) +
-  geom_line() 
+  geom_line() +
+  scale_x_date(date_labels = "%b '%y") +
+  labs(x = "", 
+       y = "Seats won (80% CI)", 
+       fill = "", 
+       colour = "")
 ```
 
 ### Two-party preferred margin
 
 #### On election day
 
-Positive represents LNC winning more of the national two-party preferred vote than the ALP. Negative represents represents Labor winning more of the two-party preferred vote than the LNC.
-
 ```{r}
+
+x_lab <- function(x) {
+  l <- tibble(x = x) |> 
+    mutate(p = case_when(x > 0 ~ " COA", 
+                         x < 0 ~ " ALP", 
+                         TRUE ~ "")) |> 
+    mutate(lab = glue("+{percent(abs(x), accuracy = 0.1)}{p}")) |> 
+    pull(lab)
+  
+  return(l)
+}
+
 samples_election_date |> 
   ggplot(aes(x = tpp_margin)) +
-  geom_density() +
+  geom_vline(xintercept = 0) +
+  geom_density(alpha = 0.9, 
+               fill = "grey", 
+               colour = NA) +
   geom_vline(xintercept = 0.0306, 
              colour = "red") + 
-  scale_x_continuous(labels = percent_format(accuracy = 0.1)) +
+  scale_x_continuous(labels = x_lab, 
+                     limits = c(-0.09, 0.09)) +
+  theme(axis.text.y = element_blank()) +
+  labs(y = "More likely →", 
+       x = "← ALP TPP higher, Coalition TPP higher →") +
   annotate("text", 
            x = 0.0306 + 0.005, 
            y = Inf, 
@@ -470,19 +520,26 @@ tpp_ts <- samples_ts |>
   group_by(date, party, colour) |> 
   summarise(tpp_50 = quantile(tpp, 0.5), 
             tpp_10 = quantile(tpp, 0.1),
-            tpp_90 = quantile(tpp, 0.9))
+            tpp_90 = quantile(tpp, 0.9)) |> 
+  ungroup() |> 
+  mutate(colour = fct_reorder2(colour, date, tpp_50))
 
 tpp_ts |> 
   ggplot(aes(x = date, 
              y = tpp_50,
              ymin = tpp_10, 
              ymax = tpp_90,
-             colour = party, 
-             fill = party)) +
-  geom_ribbon(alpha = 0.2, 
+             colour = colour, 
+             fill = colour)) +
+  geom_ribbon(alpha = 0.4, 
               colour = NA) +
   geom_line() + 
-  scale_y_continuous(labels = percent_format(accuracy = 1))
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_x_date(date_labels = "%b '%y") +
+  labs(x = "", 
+       y = "Two-party preferred vote (80% CI)",
+       fill = "", 
+       colour = "")
 ```
 
 ### 
